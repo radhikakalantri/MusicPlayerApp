@@ -1,6 +1,6 @@
 # 🎵 Music Player — Jetpack Compose · MVVM · Coroutines/Flow
 
-A Spotify-style Android music player: bottom navigation, colorful playlist
+A Android music player: bottom navigation, colorful playlist
 covers, a persistent mini-player, search with genre tiles, and a full
 "Now Playing" screen — built on Kotlin, Jetpack Compose, coroutines/Flow,
 and a testable clean-MVVM layering.
@@ -114,5 +114,5 @@ git push -u origin main
 ## Customizing
 
 - **Real songs**: replace the list in `data/repository/MusicRepositoryImpl.kt`, or point `MusicRepository` at a real API/Room database — the rest of the app is unaffected.
-- **Colors**: `presentation/theme/Color.kt` (Spotify green/black + genre tile colors).
+- **Colors**: `presentation/theme/Color.kt` (green/black + genre tile colors).
 - **New playback behaviors** (shuffle, queue, skip): add methods to the `PlaybackController` interface, implement in `ServicePlaybackController`, and they're immediately testable via `FakePlaybackController`.
