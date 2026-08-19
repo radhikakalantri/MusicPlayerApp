@@ -2,6 +2,8 @@ package com.example.musicplayerapp.service
 
 import android.app.Application
 import android.content.Intent
+import android.os.Build
+import androidx.annotation.RequiresApi
 import com.example.musicplayerapp.data.model.Playable
 import com.example.musicplayerapp.domain.PlaybackController
 
@@ -12,6 +14,7 @@ import com.example.musicplayerapp.domain.PlaybackController
  */
 class ServicePlaybackController(private val application: Application) : PlaybackController {
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun playQueue(items: List<Playable>, startIndex: Int) {
         PlaybackManager.setQueue(items, startIndex)
         sendForegroundAction(MusicPlayerService.ACTION_PLAY_QUEUE) {
@@ -19,18 +22,22 @@ class ServicePlaybackController(private val application: Application) : Playback
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun playAtIndex(index: Int) {
         sendForegroundAction(MusicPlayerService.ACTION_PLAY_QUEUE) {
             putExtra(MusicPlayerService.EXTRA_INDEX, index)
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun resume() = sendForegroundAction(MusicPlayerService.ACTION_RESUME)
 
     override fun pause() = sendAction(MusicPlayerService.ACTION_PAUSE)
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun next() = sendForegroundAction(MusicPlayerService.ACTION_NEXT)
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun previous() = sendForegroundAction(MusicPlayerService.ACTION_PREVIOUS)
 
     override fun seekTo(positionMs: Long) {
@@ -54,6 +61,7 @@ class ServicePlaybackController(private val application: Application) : Playback
     override fun stop() = sendAction(MusicPlayerService.ACTION_STOP)
 
     /** For actions that (re)start playback and must post a foreground notification promptly. */
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun sendForegroundAction(action: String, configure: Intent.() -> Unit = {}) {
         val intent = Intent(application, MusicPlayerService::class.java).apply {
             this.action = action
