@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.musicplayerapp.data.repository.MusicRepositoryImpl
 import com.example.musicplayerapp.domain.usecase.GetArtistsUseCase
+import com.example.musicplayerapp.domain.usecase.GetEpisodesUseCase
 import com.example.musicplayerapp.domain.usecase.GetMoviesUseCase
 import com.example.musicplayerapp.domain.usecase.GetPlaylistsUseCase
+import com.example.musicplayerapp.domain.usecase.GetPodcastsUseCase
 import com.example.musicplayerapp.domain.usecase.GetSongsForPlaylistUseCase
 import com.example.musicplayerapp.domain.usecase.GetSongsUseCase
 import com.example.musicplayerapp.service.PlaybackManager
@@ -26,6 +28,8 @@ class MusicViewModelFactory(private val application: Application) : ViewModelPro
             getPlaylistsUseCase = GetPlaylistsUseCase(repository),
             getArtistsUseCase = GetArtistsUseCase(repository),
             getMoviesUseCase = GetMoviesUseCase(repository),
+            getPodcastsUseCase = GetPodcastsUseCase(repository),
+            getEpisodesUseCase = GetEpisodesUseCase(repository),
             getSongsForPlaylistUseCase = GetSongsForPlaylistUseCase(),
             playbackController = ServicePlaybackController(application),
             playbackStateSource = PlaybackManager.state

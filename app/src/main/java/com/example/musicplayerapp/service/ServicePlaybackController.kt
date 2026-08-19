@@ -2,7 +2,7 @@ package com.example.musicplayerapp.service
 
 import android.app.Application
 import android.content.Intent
-import com.example.musicplayerapp.data.model.Song
+import com.example.musicplayerapp.data.model.Playable
 import com.example.musicplayerapp.domain.PlaybackController
 
 /**
@@ -12,32 +12,62 @@ import com.example.musicplayerapp.domain.PlaybackController
  */
 class ServicePlaybackController(private val application: Application) : PlaybackController {
 
-    override fun play(song: Song) {
+    override fun playQueue(items: List<Playable>, startIndex: Int) {
+        PlaybackManager.setQueue(items, startIndex)
+        sendForegroundAction(MusicPlayerService.ACTION_PLAY_QUEUE) {
+            putExtra(MusicPlayerService.EXTRA_INDEX, startIndex)
+        }
+    }
+
+    override fun playAtIndex(index: Int) {
+        sendForegroundAction(MusicPlayerService.ACTION_PLAY_QUEUE) {
+            putExtra(MusicPlayerService.EXTRA_INDEX, index)
+        }
+    }
+
+    override fun resume() = sendForegroundAction(MusicPlayerService.ACTION_RESUME)
+
+    override fun pause() = sendAction(MusicPlayerService.ACTION_PAUSE)
+
+    override fun next() = sendForegroundAction(MusicPlayerService.ACTION_NEXT)
+
+    override fun previous() = sendForegroundAction(MusicPlayerService.ACTION_PREVIOUS)
+
+    override fun seekTo(positionMs: Long) {
+        sendAction(MusicPlayerService.ACTION_SEEK) {
+            putExtra(MusicPlayerService.EXTRA_POSITION_MS, positionMs)
+        }
+    }
+
+    override fun setShuffleEnabled(enabled: Boolean) {
+        sendAction(MusicPlayerService.ACTION_SET_SHUFFLE) {
+            putExtra(MusicPlayerService.EXTRA_SHUFFLE, enabled)
+        }
+    }
+
+    override fun setPlaybackSpeed(speed: Float) {
+        sendAction(MusicPlayerService.ACTION_SET_SPEED) {
+            putExtra(MusicPlayerService.EXTRA_SPEED, speed)
+        }
+    }
+
+    override fun stop() = sendAction(MusicPlayerService.ACTION_STOP)
+
+    /** For actions that (re)start playback and must post a foreground notification promptly. */
+    private fun sendForegroundAction(action: String, configure: Intent.() -> Unit = {}) {
         val intent = Intent(application, MusicPlayerService::class.java).apply {
-            action = MusicPlayerService.ACTION_PLAY
-            putExtra(MusicPlayerService.EXTRA_SONG_ID, song.id)
-            putExtra(MusicPlayerService.EXTRA_SONG_TITLE, song.title)
-            putExtra(MusicPlayerService.EXTRA_SONG_ARTIST, song.artist)
-            putExtra(MusicPlayerService.EXTRA_SONG_URL, song.url)
-            putExtra(MusicPlayerService.EXTRA_SONG_IMAGE, song.imageUrl)
-            putExtra(MusicPlayerService.EXTRA_SONG_COLOR, song.accentColorHex)
+            this.action = action
+            configure()
         }
         application.startForegroundService(intent)
     }
 
-    override fun pause() {
-        application.startService(
-            Intent(application, MusicPlayerService::class.java).apply {
-                action = MusicPlayerService.ACTION_PAUSE
-            }
-        )
-    }
-
-    override fun stop() {
-        application.startService(
-            Intent(application, MusicPlayerService::class.java).apply {
-                action = MusicPlayerService.ACTION_STOP
-            }
-        )
+    /** For control actions sent while the service is already running (pause, seek, shuffle, speed, stop). */
+    private fun sendAction(action: String, configure: Intent.() -> Unit = {}) {
+        val intent = Intent(application, MusicPlayerService::class.java).apply {
+            this.action = action
+            configure()
+        }
+        application.startService(intent)
     }
 }

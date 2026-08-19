@@ -10,10 +10,11 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.example.musicplayerapp.MainActivity
 import com.example.musicplayerapp.R
-import com.example.musicplayerapp.data.model.Song
+import com.example.musicplayerapp.data.model.Playable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,11 +23,16 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 /**
  * Foreground service that owns the ExoPlayer instance and publishes
- * playback progress via coroutines/Flow (PlaybackManager) so the
- * Compose UI stays reactive without holding a service reference.
+ * playback progress via coroutines/Flow (PlaybackManager) so the Compose
+ * UI stays reactive without holding a service reference.
+ *
+ * Handles: queue playback, next/previous (with a small history stack so
+ * "previous" is sane under shuffle), seeking, shuffle toggling, playback
+ * speed, and auto-advance when a track finishes.
  */
 class MusicPlayerService : Service() {
 
@@ -34,74 +40,175 @@ class MusicPlayerService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var progressJob: Job? = null
 
+    /** Indices we've played, most recent last — lets "previous" undo shuffle jumps too. */
+    private val playHistory = mutableListOf<Int>()
+
     companion object {
-        const val ACTION_PLAY = "com.example.musicplayerapp.ACTION_PLAY"
+        const val ACTION_PLAY_QUEUE = "com.example.musicplayerapp.ACTION_PLAY_QUEUE"
+        const val ACTION_RESUME = "com.example.musicplayerapp.ACTION_RESUME"
         const val ACTION_PAUSE = "com.example.musicplayerapp.ACTION_PAUSE"
+        const val ACTION_NEXT = "com.example.musicplayerapp.ACTION_NEXT"
+        const val ACTION_PREVIOUS = "com.example.musicplayerapp.ACTION_PREVIOUS"
+        const val ACTION_SEEK = "com.example.musicplayerapp.ACTION_SEEK"
+        const val ACTION_SET_SHUFFLE = "com.example.musicplayerapp.ACTION_SET_SHUFFLE"
+        const val ACTION_SET_SPEED = "com.example.musicplayerapp.ACTION_SET_SPEED"
         const val ACTION_STOP = "com.example.musicplayerapp.ACTION_STOP"
 
-        const val EXTRA_SONG_ID = "extra_song_id"
-        const val EXTRA_SONG_TITLE = "extra_song_title"
-        const val EXTRA_SONG_ARTIST = "extra_song_artist"
-        const val EXTRA_SONG_URL = "extra_song_url"
-        const val EXTRA_SONG_IMAGE = "extra_song_image"
-        const val EXTRA_SONG_COLOR = "extra_song_color"
+        const val EXTRA_INDEX = "extra_index"
+        const val EXTRA_POSITION_MS = "extra_position_ms"
+        const val EXTRA_SHUFFLE = "extra_shuffle"
+        const val EXTRA_SPEED = "extra_speed"
 
         private const val CHANNEL_ID = "music_playback_channel"
         private const val NOTIFICATION_ID = 101
+        private const val RESTART_THRESHOLD_MS = 3000L
     }
 
     override fun onCreate() {
         super.onCreate()
-        exoPlayer = ExoPlayer.Builder(this).build()
+        exoPlayer = ExoPlayer.Builder(this).build().apply {
+            addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_ENDED) {
+                        advance()
+                    }
+                }
+            })
+        }
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_PLAY -> intent.let { handlePlay(it) }
-            ACTION_PAUSE -> pause()
-            ACTION_STOP -> stopPlayback()
+            ACTION_PLAY_QUEUE -> handlePlayQueue(intent)
+            ACTION_RESUME -> handleResume()
+            ACTION_PAUSE -> handlePause()
+            ACTION_NEXT -> advance()
+            ACTION_PREVIOUS -> handlePrevious()
+            ACTION_SEEK -> handleSeek(intent)
+            ACTION_SET_SHUFFLE -> handleSetShuffle(intent)
+            ACTION_SET_SPEED -> handleSetSpeed(intent)
+            ACTION_STOP -> handleStop()
         }
         return START_STICKY
     }
 
-    private fun handlePlay(intent: Intent) {
-        val url = intent.getStringExtra(EXTRA_SONG_URL) ?: return
-        val song = Song(
-            id = intent.getIntExtra(EXTRA_SONG_ID, 0),
-            title = intent.getStringExtra(EXTRA_SONG_TITLE) ?: "",
-            artist = intent.getStringExtra(EXTRA_SONG_ARTIST) ?: "",
-            url = url,
-            imageUrl = intent.getStringExtra(EXTRA_SONG_IMAGE) ?: "",
-            accentColorHex = intent.getStringExtra(EXTRA_SONG_COLOR) ?: "#6C5CE7"
-        )
+    private fun handlePlayQueue(intent: Intent) {
+        val index = intent.getIntExtra(EXTRA_INDEX, 0)
+        playHistory.clear()
+        val queue = PlaybackManager.state.value.queue
+        loadAndPlay(queue, index)
+    }
 
-        val currentState = PlaybackManager.state.value
-        if (currentState.currentSong?.id != song.id) {
-            exoPlayer?.setMediaItem(MediaItem.fromUri(url))
-            exoPlayer?.prepare()
-        }
+    private fun handleResume() {
         exoPlayer?.play()
-
-        startForeground(NOTIFICATION_ID, buildNotification(song, isPlaying = true))
-        PlaybackManager.update(currentState.copy(currentSong = song, isPlaying = true))
+        val current = PlaybackManager.state.value
+        PlaybackManager.update(current.copy(isPlaying = true))
+        current.currentItem?.let { startForeground(NOTIFICATION_ID, buildNotification(it, isPlaying = true)) }
         startProgressUpdates()
     }
 
-    private fun pause() {
+    private fun handlePause() {
         exoPlayer?.pause()
         val current = PlaybackManager.state.value
         PlaybackManager.update(current.copy(isPlaying = false))
-        current.currentSong?.let { startForeground(NOTIFICATION_ID, buildNotification(it, isPlaying = false)) }
+        current.currentItem?.let { startForeground(NOTIFICATION_ID, buildNotification(it, isPlaying = false)) }
         progressJob?.cancel()
     }
 
-    private fun stopPlayback() {
+    private fun advance() {
+        val current = PlaybackManager.state.value
+        val queue = current.queue
+        if (queue.isEmpty() || current.currentIndex < 0) return
+
+        playHistory.add(current.currentIndex)
+
+        val nextIndex = if (current.isShuffleEnabled) {
+            randomIndexExcluding(queue.size, current.currentIndex)
+        } else if (current.currentIndex + 1 < queue.size) {
+            current.currentIndex + 1
+        } else {
+            0
+        }
+        loadAndPlay(queue, nextIndex)
+    }
+
+    private fun handlePrevious() {
+        val current = PlaybackManager.state.value
+        val queue = current.queue
+        if (queue.isEmpty()) return
+
+        // Standard player behavior: more than a few seconds in, "previous" restarts the track.
+        if ((exoPlayer?.currentPosition ?: 0L) > RESTART_THRESHOLD_MS) {
+            exoPlayer?.seekTo(0)
+            PlaybackManager.update(current.copy(currentPositionMs = 0L))
+            return
+        }
+
+        val previousIndex = when {
+            playHistory.isNotEmpty() -> playHistory.removeAt(playHistory.size - 1)
+            current.isShuffleEnabled -> randomIndexExcluding(queue.size, current.currentIndex)
+            current.currentIndex - 1 >= 0 -> current.currentIndex - 1
+            else -> queue.size - 1
+        }
+        loadAndPlay(queue, previousIndex)
+    }
+
+    private fun randomIndexExcluding(size: Int, exclude: Int): Int {
+        if (size <= 1) return 0
+        var index: Int
+        do {
+            index = Random.nextInt(size)
+        } while (index == exclude)
+        return index
+    }
+
+    private fun handleSeek(intent: Intent) {
+        val positionMs = intent.getLongExtra(EXTRA_POSITION_MS, 0L)
+        exoPlayer?.seekTo(positionMs)
+        PlaybackManager.update(PlaybackManager.state.value.copy(currentPositionMs = positionMs))
+    }
+
+    private fun handleSetShuffle(intent: Intent) {
+        val enabled = intent.getBooleanExtra(EXTRA_SHUFFLE, false)
+        PlaybackManager.update(PlaybackManager.state.value.copy(isShuffleEnabled = enabled))
+    }
+
+    private fun handleSetSpeed(intent: Intent) {
+        val speed = intent.getFloatExtra(EXTRA_SPEED, 1f)
+        exoPlayer?.setPlaybackSpeed(speed)
+        PlaybackManager.update(PlaybackManager.state.value.copy(playbackSpeed = speed))
+    }
+
+    private fun handleStop() {
         exoPlayer?.stop()
+        playHistory.clear()
         PlaybackManager.update(PlaybackState())
         progressJob?.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun loadAndPlay(queue: List<Playable>, index: Int) {
+        val item = queue.getOrNull(index) ?: return
+        val speed = PlaybackManager.state.value.playbackSpeed
+
+        exoPlayer?.setMediaItem(MediaItem.fromUri(item.url))
+        exoPlayer?.prepare()
+        exoPlayer?.setPlaybackSpeed(speed)
+        exoPlayer?.play()
+
+        startForeground(NOTIFICATION_ID, buildNotification(item, isPlaying = true))
+        PlaybackManager.update(
+            PlaybackManager.state.value.copy(
+                queue = queue,
+                currentIndex = index,
+                isPlaying = true,
+                currentPositionMs = 0L,
+                durationMs = 0L
+            )
+        )
+        startProgressUpdates()
     }
 
     private fun startProgressUpdates() {
@@ -135,15 +242,15 @@ class MusicPlayerService : Service() {
         }
     }
 
-    private fun buildNotification(song: Song, isPlaying: Boolean): Notification {
+    private fun buildNotification(item: Playable, isPlaying: Boolean): Notification {
         val contentIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(song.title)
-            .setContentText(song.artist)
+            .setContentTitle(item.title)
+            .setContentText(item.subtitle)
             .setSmallIcon(R.drawable.ic_music_note)
             .setContentIntent(contentIntent)
             .setOngoing(isPlaying)

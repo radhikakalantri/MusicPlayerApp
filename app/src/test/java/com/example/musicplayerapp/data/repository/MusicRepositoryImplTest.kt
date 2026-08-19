@@ -97,4 +97,38 @@ class MusicRepositoryImplTest {
             songsWithoutMovie.none { it in idsInMovies }
         )
     }
+
+    @Test
+    fun `getPodcasts groups episodes by show with a matching episode count`() = runTest {
+        val episodes = repository.getEpisodes().first()
+        val podcasts = repository.getPodcasts().first()
+
+        assertTrue("expected at least one podcast in the sample catalog", podcasts.isNotEmpty())
+        podcasts.forEach { podcast ->
+            val expectedCount = episodes.count { it.podcastTitle == podcast.title }
+            assertEquals(
+                "episode count for '${podcast.title}' should match the catalog",
+                expectedCount,
+                podcast.episodeIds.size
+            )
+            podcast.episodeIds.forEach { episodeId ->
+                val episode = episodes.first { it.id == episodeId }
+                assertEquals(podcast.title, episode.podcastTitle)
+            }
+        }
+    }
+
+    @Test
+    fun `episode ids never collide with song ids`() = runTest {
+        val songs = repository.getSongs().first()
+        val episodes = repository.getEpisodes().first()
+
+        val songIds = songs.map { it.id }.toSet()
+        val episodeIds = episodes.map { it.id }.toSet()
+
+        assertTrue(
+            "song and episode id spaces should never overlap since they share the playback queue",
+            songIds.intersect(episodeIds).isEmpty()
+        )
+    }
 }

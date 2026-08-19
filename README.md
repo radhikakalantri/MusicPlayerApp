@@ -14,29 +14,48 @@ and a testable clean-MVVM layering.
 
 - **Home** — greeting, "Shuffle Play" CTA, horizontal row of playlists, "Popular right now" list
 - **Search** — text search across song title, artist, and movie/soundtrack name; shows a colorful genre grid when empty, and "From Movies" / "Artists" / "Songs" result sections when typing
+- **Podcasts** — grid of shows → tap into a **Podcast detail** screen listing episodes
 - **Your Library** — Liked Songs entry + all playlists
-- **Playlist detail** — cover, description, and its songs
-- **Movie detail** — a soundtrack's cover + every song tagged to it
-- **Now Playing** — full-screen player with blurred album-art background, gradient play/pause + like button
-- **Mini-player** — persistent bar above the bottom nav, opens Now Playing
+- **Playlist detail** — cover, description, and its songs (playing here queues just that playlist)
+- **Movie detail** — a soundtrack's cover + every song tagged to it (queues just that soundtrack)
+- **Now Playing** — full-screen player: seekable progress bar, shuffle toggle, previous/next, gradient play/pause, like, and a 0.5x–2x playback speed picker
+- **Up Next (Queue)** — the whole current queue with the playing item highlighted; tap any row to jump to it
+- **Mini-player** — persistent bar above the bottom nav with play/pause + skip-next, opens Now Playing on tap
 
-> Search-by-movie works against `movieTitle` tags on the sample songs (original/fictional soundtrack names, not real films) — real, licensed catalog metadata plugs into the same field with no UI changes.
+> Search-by-movie and podcasts both work against sample data (original/fictional soundtrack and show names, not real films or shows) — real, licensed catalog metadata plugs into the same fields with no UI changes.
+
+## Playback features
+
+- **Queue-based playback** — playing any song/episode loads a queue (the playlist, movie, podcast, or full catalog it came from) so next/previous stay contextual
+- **Next / Previous** — previous restarts the current track if you're more than 3s in (standard player behavior), otherwise steps back; a small history stack makes "previous" sane even under shuffle
+- **Shuffle** — toggle on the Now Playing screen; next/previous pick randomly within the current queue while enabled
+- **Seekable progress bar** — drag to scrub to any point in the track
+- **Playback speed** — 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x, applied live via ExoPlayer
+- **Auto-advance** — the next queue item starts automatically when the current one finishes
+- **Podcasts** — episodes are just another `Playable`, so they get the exact same queue/shuffle/speed/seek controls as songs
 
 ## Architecture
 
 ```
-data/          Song, Playlist, Artist, Movie models + MusicRepository (swap in Retrofit/Room later)
-domain/        GetSongsUseCase, GetPlaylistsUseCase, GetArtistsUseCase, GetMoviesUseCase, GetSongsForPlaylistUseCase
-               PlaybackController (interface — dependency inversion for playback)
-service/       MusicPlayerService (ExoPlayer, foreground service)
+data/          Song, Playlist, Artist, Movie, Episode, Podcast models (Song & Episode implement Playable)
+                MusicRepository (swap in Retrofit/Room later)
+domain/        GetSongsUseCase, GetPlaylistsUseCase, GetArtistsUseCase, GetMoviesUseCase,
+                GetPodcastsUseCase, GetEpisodesUseCase, GetSongsForPlaylistUseCase
+                PlaybackController (interface — queue/next/previous/seek/shuffle/speed, dependency-inverted)
+service/       MusicPlayerService (ExoPlayer, foreground service, owns the queue/history/auto-advance)
                ServicePlaybackController (implements PlaybackController via Intents)
-               PlaybackManager (StateFlow bridge between service & UI)
+               PlaybackManager (StateFlow bridge + in-memory queue, shared between Service and ViewModel)
 presentation/  MusicViewModel (plain ViewModel — no Android deps, fully unit-testable)
                MusicViewModelFactory (manual DI wiring)
-               screens/ (Home, Search, Library, PlaylistDetail, Player)
-               components/ (SongItem, PlaylistCard, MiniPlayer, BottomNavBar, GradientBackground)
+               screens/ (Home, Search, Podcasts, PodcastDetail, Library, PlaylistDetail, MovieDetail, Player, Queue)
+               components/ (SongItem, EpisodeItem, PlaylistCard, MovieCard, PodcastCard, ArtistCard,
+                             MiniPlayer, BottomNavBar, GradientButton, GradientIconButton)
                theme/, navigation/ (NavGraph)
 ```
+
+`Playable` is the common interface `Song` and `Episode` both implement (id, title, subtitle, url, imageUrl,
+accentColorHex) — it's what lets the queue, shuffle, seek, speed, and player UI work identically for music
+and podcasts without duplicating any playback logic.
 
 `MusicViewModel` depends only on use cases and the `PlaybackController`
 interface — never on `Context`/`Intent`/`Service` directly. That's what lets

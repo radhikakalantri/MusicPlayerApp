@@ -3,13 +3,17 @@ package com.example.musicplayerapp.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.musicplayerapp.data.model.Artist
+import com.example.musicplayerapp.data.model.Episode
 import com.example.musicplayerapp.data.model.Movie
 import com.example.musicplayerapp.data.model.Playlist
+import com.example.musicplayerapp.data.model.Podcast
 import com.example.musicplayerapp.data.model.Song
 import com.example.musicplayerapp.domain.PlaybackController
 import com.example.musicplayerapp.domain.usecase.GetArtistsUseCase
+import com.example.musicplayerapp.domain.usecase.GetEpisodesUseCase
 import com.example.musicplayerapp.domain.usecase.GetMoviesUseCase
 import com.example.musicplayerapp.domain.usecase.GetPlaylistsUseCase
+import com.example.musicplayerapp.domain.usecase.GetPodcastsUseCase
 import com.example.musicplayerapp.domain.usecase.GetSongsForPlaylistUseCase
 import com.example.musicplayerapp.domain.usecase.GetSongsUseCase
 import com.example.musicplayerapp.service.PlaybackState
@@ -31,6 +35,8 @@ class MusicViewModel(
     private val getPlaylistsUseCase: GetPlaylistsUseCase,
     private val getArtistsUseCase: GetArtistsUseCase,
     private val getMoviesUseCase: GetMoviesUseCase,
+    private val getPodcastsUseCase: GetPodcastsUseCase,
+    private val getEpisodesUseCase: GetEpisodesUseCase,
     private val getSongsForPlaylistUseCase: GetSongsForPlaylistUseCase,
     private val playbackController: PlaybackController,
     playbackStateSource: StateFlow<PlaybackState>
@@ -47,6 +53,12 @@ class MusicViewModel(
 
     private val _movies = MutableStateFlow<List<Movie>>(emptyList())
     val movies: StateFlow<List<Movie>> = _movies
+
+    private val _podcasts = MutableStateFlow<List<Podcast>>(emptyList())
+    val podcasts: StateFlow<List<Podcast>> = _podcasts
+
+    private val _episodes = MutableStateFlow<List<Episode>>(emptyList())
+    val episodes: StateFlow<List<Episode>> = _episodes
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
@@ -93,26 +105,67 @@ class MusicViewModel(
         viewModelScope.launch { getPlaylistsUseCase().collect { _playlists.value = it } }
         viewModelScope.launch { getArtistsUseCase().collect { _artists.value = it } }
         viewModelScope.launch { getMoviesUseCase().collect { _movies.value = it } }
+        viewModelScope.launch { getPodcastsUseCase().collect { _podcasts.value = it } }
+        viewModelScope.launch { getEpisodesUseCase().collect { _episodes.value = it } }
+    }
+
+    fun onSearchQueryChange(newQuery: String) {
+        _searchQuery.value = newQuery
     }
 
     fun songsForMovie(movie: Movie): List<Song> =
         _songs.value.filter { it.id in movie.songIds }
 
-    fun onSearchQueryChange(query: String) {
-        _searchQuery.value = query
-    }
-
     fun songsForPlaylist(playlist: Playlist): List<Song> =
         getSongsForPlaylistUseCase(playlist, _songs.value)
 
-    fun playSong(song: Song) {
-        playbackController.play(song)
+    fun episodesForPodcast(podcast: Podcast): List<Episode> =
+        _episodes.value.filter { it.id in podcast.episodeIds }
+
+    /**
+     * Plays a song, queuing [queueContext] around it (defaults to the full
+     * catalog) so next/previous naturally cycle through that list —
+     * e.g. pass a playlist's songs so skipping stays within the playlist.
+     */
+    fun playSong(song: Song, queueContext: List<Song> = _songs.value) {
+        val index = queueContext.indexOf(song).let { if (it >= 0) it else 0 }
+        playbackController.playQueue(queueContext, index)
+    }
+
+    fun playEpisode(episode: Episode, queueContext: List<Episode> = _episodes.value) {
+        val index = queueContext.indexOf(episode).let { if (it >= 0) it else 0 }
+        playbackController.playQueue(queueContext, index)
+    }
+
+    /** Jumps to an item already sitting in the current queue — used by the "Up Next" screen. */
+    fun playAtQueueIndex(index: Int) {
+        playbackController.playAtIndex(index)
     }
 
     fun togglePlayPause() {
         val current = playbackState.value
-        val song = current.currentSong ?: return
-        if (current.isPlaying) playbackController.pause() else playbackController.play(song)
+        if (current.currentItem == null) return
+        if (current.isPlaying) playbackController.pause() else playbackController.resume()
+    }
+
+    fun skipNext() {
+        playbackController.next()
+    }
+
+    fun skipPrevious() {
+        playbackController.previous()
+    }
+
+    fun seekTo(positionMs: Long) {
+        playbackController.seekTo(positionMs)
+    }
+
+    fun toggleShuffle() {
+        playbackController.setShuffleEnabled(!playbackState.value.isShuffleEnabled)
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        playbackController.setPlaybackSpeed(speed)
     }
 
     fun stop() {

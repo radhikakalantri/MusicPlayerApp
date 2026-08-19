@@ -1,8 +1,10 @@
 package com.example.musicplayerapp.data.repository
 
 import com.example.musicplayerapp.data.model.Artist
+import com.example.musicplayerapp.data.model.Episode
 import com.example.musicplayerapp.data.model.Movie
 import com.example.musicplayerapp.data.model.Playlist
+import com.example.musicplayerapp.data.model.Podcast
 import com.example.musicplayerapp.data.model.Song
 import kotlinx.coroutines.flow.Flow
 
@@ -11,4 +13,6 @@ interface MusicRepository {
     fun getPlaylists(): Flow<List<Playlist>>
     fun getArtists(): Flow<List<Artist>>
     fun getMovies(): Flow<List<Movie>>
+    fun getPodcasts(): Flow<List<Podcast>>
+    fun getEpisodes(): Flow<List<Episode>>
 }

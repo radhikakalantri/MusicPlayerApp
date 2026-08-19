@@ -1,8 +1,10 @@
 package com.example.musicplayerapp.data.repository
 
 import com.example.musicplayerapp.data.model.Artist
+import com.example.musicplayerapp.data.model.Episode
 import com.example.musicplayerapp.data.model.Movie
 import com.example.musicplayerapp.data.model.Playlist
+import com.example.musicplayerapp.data.model.Podcast
 import com.example.musicplayerapp.data.model.Song
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -44,6 +46,15 @@ class MusicRepositoryImpl : MusicRepository {
         Playlist(6, "Party Anthems", "Turn it up", "https://picsum.photos/seed/partyanthems/600/600", listOf(2, 6, 8, 9))
     )
 
+    private val episodes = listOf(
+        Episode(101, "Building Better Habits", "Mindset Weekly", "Jordan Lee", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", "https://picsum.photos/seed/mindsetweekly1/600/600", "#1DB954", "32 min"),
+        Episode(102, "The Focus Trap", "Mindset Weekly", "Jordan Lee", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", "https://picsum.photos/seed/mindsetweekly2/600/600", "#1DB954", "28 min"),
+        Episode(103, "Rest as Strategy", "Mindset Weekly", "Jordan Lee", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", "https://picsum.photos/seed/mindsetweekly3/600/600", "#1DB954", "35 min"),
+        Episode(104, "Indie Devs to Watch", "Tech Unfiltered", "Priya Nair", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", "https://picsum.photos/seed/techunfiltered1/600/600", "#509BF5", "41 min"),
+        Episode(105, "The AI Hype Cycle", "Tech Unfiltered", "Priya Nair", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3", "https://picsum.photos/seed/techunfiltered2/600/600", "#509BF5", "38 min"),
+        Episode(106, "Shipping Fast, Breaking Things", "Tech Unfiltered", "Priya Nair", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3", "https://picsum.photos/seed/techunfiltered3/600/600", "#509BF5", "44 min")
+    )
+
     override fun getSongs(): Flow<List<Song>> = flow {
         emit(songs)
     }
@@ -79,5 +90,24 @@ class MusicRepositoryImpl : MusicRepository {
             }
             .sortedBy { it.title }
         emit(movies)
+    }
+
+    override fun getPodcasts(): Flow<List<Podcast>> = flow {
+        val podcasts = episodes
+            .groupBy { it.podcastTitle }
+            .map { (title, showEpisodes) ->
+                Podcast(
+                    title = title,
+                    host = showEpisodes.first().host,
+                    coverUrl = showEpisodes.first().imageUrl,
+                    episodeIds = showEpisodes.map { it.id }
+                )
+            }
+            .sortedBy { it.title }
+        emit(podcasts)
+    }
+
+    override fun getEpisodes(): Flow<List<Episode>> = flow {
+        emit(episodes)
     }
 }

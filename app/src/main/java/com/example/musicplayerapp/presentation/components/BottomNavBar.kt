@@ -1,6 +1,7 @@
 package com.example.musicplayerapp.presentation.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Search
@@ -20,6 +21,7 @@ private data class NavItem(val screen: Screen, val label: String)
 private val items = listOf(
     NavItem(Screen.Home, "Home"),
     NavItem(Screen.Search, "Search"),
+    NavItem(Screen.Podcasts, "Podcasts"),
     NavItem(Screen.Library, "Your Library")
 )
 
@@ -36,6 +38,7 @@ fun BottomNavBar(currentRoute: String?, onNavigate: (Screen) -> Unit) {
                         imageVector = when (item.screen) {
                             Screen.Home -> Icons.Filled.Home
                             Screen.Search -> Icons.Filled.Search
+                            Screen.Podcasts -> Icons.Filled.Headset
                             Screen.Library -> Icons.Filled.LibraryMusic
                             else -> Icons.Filled.Home
                         },

@@ -14,6 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,16 +33,19 @@ import com.example.musicplayerapp.presentation.theme.SpotifyCardGray
 import com.example.musicplayerapp.service.PlaybackState
 
 /**
- * Persistent bottom bar shown above the nav bar whenever a song is loaded —
- * the Spotify-style "now playing" strip that opens the full player on tap.
+ * Persistent bottom bar shown above the nav bar whenever something is
+ * loaded — the Spotify-style "now playing" strip that opens the full
+ * player on tap. Works for songs and podcast episodes alike since it only
+ * reads the common Playable fields.
  */
 @Composable
 fun MiniPlayer(
     playbackState: PlaybackState,
     onTogglePlayPause: () -> Unit,
+    onSkipNext: () -> Unit,
     onClick: () -> Unit
 ) {
-    val song = playbackState.currentSong ?: return
+    val item = playbackState.currentItem ?: return
 
     Row(
         modifier = Modifier
@@ -51,8 +57,8 @@ fun MiniPlayer(
         verticalAlignment = Alignment.CenterVertically
     ) {
         AsyncImage(
-            model = song.imageUrl,
-            contentDescription = song.title,
+            model = item.imageUrl,
+            contentDescription = item.title,
             modifier = Modifier
                 .size(44.dp)
                 .clip(RoundedCornerShape(6.dp)),
@@ -60,9 +66,9 @@ fun MiniPlayer(
         )
         Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = song.title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = item.title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                text = song.artist,
+                text = item.subtitle,
                 color = Color.White.copy(alpha = 0.65f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -75,5 +81,8 @@ fun MiniPlayer(
             size = 40.dp,
             colors = listOf(PurpleGradientStart, AccentPink)
         )
+        IconButton(onClick = onSkipNext) {
+            Icon(Icons.Filled.SkipNext, contentDescription = "Next", tint = Color.White)
+        }
     }
 }
