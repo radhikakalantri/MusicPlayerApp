@@ -5,10 +5,6 @@ covers, a persistent mini-player, search with genre tiles, and a full
 "Now Playing" screen — built on Kotlin, Jetpack Compose, coroutines/Flow,
 and a testable clean-MVVM layering.
 
-> Note: this uses royalty-free sample tracks/artwork, not Spotify's actual
-> catalog — that's licensed content I can't include. Swap `MusicRepositoryImpl`
-> for your own API/catalog whenever you're ready; nothing above the data
-> layer needs to change.
 
 ## Screens
 
